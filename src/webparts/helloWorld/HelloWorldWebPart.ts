@@ -12,6 +12,15 @@ import { escape } from '@microsoft/sp-lodash-subset';
 import styles from './HelloWorldWebPart.module.scss';
 import * as strings from 'HelloWorldWebPartStrings';
 
+export interface IList {
+  Title: string;
+  Id: string;
+}
+
+export interface ILists {
+  value: IList[];
+}
+
 export interface IHelloWorldWebPartProps {
   description: string;
   test: string;
