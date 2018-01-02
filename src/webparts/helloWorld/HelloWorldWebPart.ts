@@ -1,4 +1,6 @@
-import { Version } from '@microsoft/sp-core-library';
+import { Version,
+  Environment,
+  EnvironmentType } from '@microsoft/sp-core-library';
 import {
   BaseClientSideWebPart,
   IPropertyPaneConfiguration,
@@ -11,14 +13,17 @@ import { escape } from '@microsoft/sp-lodash-subset';
 
 import styles from './HelloWorldWebPart.module.scss';
 import * as strings from 'HelloWorldWebPartStrings';
+import MockHttpClient from './MockHttpClient';
+import {SPHttpClient, SPHttpClientResponse} from '@microsoft/sp-http'
+import { IAdalJsModule } from '@microsoft/sp-http/lib/oauthTokenProvider/OAuth2TokenProvider';
 
-export interface IList {
+export interface ISPList {
   Title: string;
   Id: string;
 }
 
-export interface ILists {
-  value: IList[];
+export interface ISPLists {
+  value: ISPList[];
 }
 
 export interface IHelloWorldWebPartProps {
@@ -30,6 +35,35 @@ export interface IHelloWorldWebPartProps {
 }
 
 export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorldWebPartProps> {
+
+  private _getMockListData(): Promise<ISPLists> {
+    return MockHttpClient.get().then((data: ISPList[]) => {
+      var listData: ISPLists = {value: data};
+      return listData;
+    }) as Promise<ISPLists>;
+  }
+
+  private _getListData(): Promise<ISPLists> {
+    return this.context.spHttpClient.get(this.context.pageContext.web.absoluteUrl + 
+      `/_api/web/lists?$filter=Hidden eq false`, SPHttpClient.configurations.v1)
+      .then((respsonse: SPHttpClientResponse) => {
+        return respsonse.json();
+      });
+  }
+
+  private _renderListAsync(): void {
+    //Local environment
+    if (Environment.type === EnvironmentType.Local) {
+      this._getMockListData().then((response) => {
+        this._renderList(response.value);
+      });
+    }
+    else if (Environment.type === EnvironmentType.ClassicSharePoint || EnvironmentType.SharePoint) {
+      this._getListData().then((response) => {
+        this._renderList(response.value);
+      });
+    }
+  }
 
   public render(): void {
     this.domElement.innerHTML = `
@@ -47,8 +81,27 @@ export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorld
               </a>
             </div>
           </div>
+          <div id="spListContainer" />
         </div>
       </div>`;
+
+      this._renderListAsync();
+  }
+
+  private _renderList(items: ISPList[]): void {
+    let html: string = '';
+    items.forEach ((item: ISPList) => {
+      html += `
+        <ul class="${styles.list}">
+          <li class="${styles.listItem}">
+            <span class="ms-font-1">${item.Title}</span>
+          </li>
+        </ul>
+      `;
+    });
+
+    const listContainer: Element = this.domElement.querySelector('#spListContainer');
+    listContainer.innerHTML = html;
   }
 
   protected get dataVersion(): Version {
